@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 interface Report { converted: number; skipped: number; failed: string[] }
 async function convertImages(file: File, format: string, setProgress: (progress: number) => void, setCurrentFile: (currentFile: string) => void, report : Report, setReport: React.Dispatch<React.SetStateAction<Report>>): Promise<Blob> {
-  const timeout = 30000;
+  const timeout = 15000;
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
 
