@@ -1,13 +1,13 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { Button } from "@/components/ui/button";
+import heic2any from 'heic2any';
+import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import heic2any from 'heic2any';
 
 async function convertImages(file: File, format: string, setProgress: (progress: number) => void): Promise<Blob> {
   return new Promise((resolve, reject) => {
@@ -25,7 +25,7 @@ async function convertImages(file: File, format: string, setProgress: (progress:
       try {
         await zip.loadAsync(zipData);
 
-        const files = zip.file(/\.(png|jpg|jpeg|heic|gif)$/i);
+        const files = zip.file(/\.(png|jpg|jpeg|heic|gif|webp|avif|bmp|tiff)$/i);
         const totalFiles = files.length;
         let completedFiles = 0;
 
@@ -37,11 +37,17 @@ async function convertImages(file: File, format: string, setProgress: (progress:
         for (const file of files) {
           try {
             const blob = await file.async("blob");
+            const fileExtension = file.name.split(".").pop()?.toLowerCase() ?? "";
+
+            if (fileExtension === "webp" && format === "webp") {
+              zip.file(file.name, blob);
+              completedFiles++;
+              setProgress((completedFiles / totalFiles) * 100);
+              continue;
+            }
             let imgBlob: Blob = blob;
 
-            const fileExtension = file.name.split('.').pop()?.toLowerCase();
-
-            if (fileExtension === 'heic') {
+            if(fileExtension === 'heic'){
               const convertedBlob = await heic2any({
                 blob: blob,
                 toType: 'image/jpeg',
@@ -50,23 +56,21 @@ async function convertImages(file: File, format: string, setProgress: (progress:
               imgBlob = convertedBlob;
             }
 
-            const img = new Image();
-            const imageUrl = URL.createObjectURL(imgBlob);
+            const img = new Image();//only one image
+             const imageUrl = URL.createObjectURL(imgBlob);
 
-            await new Promise<void>((resolve, reject) => {
+             await new Promise<void>((resolve, reject) => {
               img.onload = () => {
                 URL.revokeObjectURL(imageUrl);
                 resolve();
-              };
-
+              };              
               img.onerror = (error) => {
                 URL.revokeObjectURL(imageUrl);
                 reject(error);
               };
 
               img.src = imageUrl;
-            });
-
+             });
 
             const canvas = document.createElement('canvas');
             canvas.width = img.width;
@@ -74,9 +78,9 @@ async function convertImages(file: File, format: string, setProgress: (progress:
             const ctx = canvas.getContext('2d');
 
             if (!ctx) {
-              console.error("Could not get canvas context");
-              completedFiles++;
-              setProgress((completedFiles / totalFiles) * 100);
+             console.error("Could not get canvas context");
+             completedFiles++;
+             setProgress((completedFiles / totalFiles) * 100);
               continue;
             }
 
@@ -94,7 +98,7 @@ async function convertImages(file: File, format: string, setProgress: (progress:
 
             if (!convertedBlob) {
               console.error("Could not convert image");
-              completedFiles++;
+              
               setProgress((completedFiles / totalFiles) * 100);
               continue;
             }
@@ -182,8 +186,7 @@ export default function Home() {
     }
   }, [file, format, toast]);
 
-  return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-background p-4">
+  return (<div className="flex flex-col items-center justify-center min-h-screen bg-background p-4">
       <h1 className="text-2xl font-semibold mb-4">Zip Image Converter</h1>
       <div className="flex flex-col gap-4 w-full max-w-md">
         <div>
@@ -200,6 +203,7 @@ export default function Home() {
             <SelectContent>
               <SelectItem value="jpeg">JPEG</SelectItem>
               <SelectItem value="png">PNG</SelectItem>
+              <SelectItem value="avif">AVIF</SelectItem>
               <SelectItem value="webp">WEBP</SelectItem>
             </SelectContent>
           </Select>
@@ -221,3 +225,4 @@ export default function Home() {
     </div>
   );
 }
+
