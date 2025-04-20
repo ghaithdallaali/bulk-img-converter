@@ -2,6 +2,8 @@
 
 This is a simple web application that allows you to convert images within a zip file to a specified format. All image conversions are done in the browser, ensuring your data stays private. No image data is sent to any third-party service.
 
+A lot of the code is built with Google AI Studio, so be warned.
+
 ## Technologies Used
 
 *   **TypeScript:** For type-safe and scalable code.
