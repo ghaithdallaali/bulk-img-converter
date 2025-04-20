@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
-import heic2any from 'heic2any';
+import { useState, useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 interface Report { converted: number; skipped: number; failed: string[] }
 async function convertImages(file: File, format: string, setProgress: (progress: number) => void, setCurrentFile: (currentFile: string) => void, report : Report, setReport: React.Dispatch<React.SetStateAction<Report>>): Promise<Blob> {
-  const timeout = 10000;
+  const timeout = 30000;
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
 
@@ -71,6 +70,7 @@ async function convertImages(file: File, format: string, setProgress: (progress:
             if (fileExtension === 'heic') {
               let convertedBlob: Blob;
               try {
+                const heic2any = (await import('heic2any')).default;
                 convertedBlob = await heic2any({
                   blob: blob,
                   toType: 'image/jpeg',
@@ -192,6 +192,7 @@ export default function Home() {
   const [isConverting, setIsConverting] = useState(false);
   const [currentFile, setCurrentFile] = useState<string>("");
   const [report, setReport] = useState<Report>({converted : 0, skipped: 0, failed : []})
+  const [isClient, setIsClient] = useState(false);
 
   const { toast } = useToast();
 
@@ -250,6 +251,10 @@ export default function Home() {
 
   }, [file, format, toast]);
 
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
   return (<div className="flex flex-col items-center justify-center min-h-screen bg-background p-4">
       <h1 className="text-4xl font-bold text-center mb-6">Zip Image Converter</h1>
       <p className="text-center text-muted-foreground mb-8 max-w-md">
@@ -294,7 +299,7 @@ export default function Home() {
             </p>
           </div>
         )}
-        {!isConverting && (
+        {!isConverting && isClient && (
         <div className="w-full mt-4">
           <Label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
             Conversion Report:
@@ -305,14 +310,13 @@ export default function Home() {
           <p className="text-sm text-muted-foreground mt-1">
             {report.skipped} file(s) were not images and were skipped.
           </p>
-          <p className="text-sm text-muted-foreground mt-1">
+          <div className="text-sm text-muted-foreground mt-1">
             {report.failed.length} image(s) failed to convert:
             <ul>{report.failed.map((item) => (<li key={item}>{item}</li>))}</ul>
-          </p>
+          </div>
         </div>
       )}
       </div>
     </div>
   );
 }
-
