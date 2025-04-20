@@ -9,7 +9,7 @@ import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 
-async function convertImages(file: File, format: string, setProgress: (progress: number) => void): Promise<Blob> {
+async function convertImages(file: File, format: string, setProgress: (progress: number) => void, setCurrentFile: (currentFile: string) => void): Promise<Blob> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
 
@@ -26,6 +26,12 @@ async function convertImages(file: File, format: string, setProgress: (progress:
         await zip.loadAsync(zipData);
 
         const files = zip.file(/\.(png|jpg|jpeg|heic|gif|webp|avif|bmp|tiff)$/i);
+        const otherFiles = zip.filter((relativePath, file) => {
+          return !/\.(png|jpg|jpeg|heic|gif|webp|avif|bmp|tiff)$/i.test(relativePath);
+        });
+        for (const file of otherFiles){
+          zip.file(file.name, await file.async('blob'));
+        }
         const totalFiles = files.length;
         let completedFiles = 0;
 
@@ -35,6 +41,7 @@ async function convertImages(file: File, format: string, setProgress: (progress:
         }
 
         for (const file of files) {
+          setCurrentFile(file.name + ": Processing");
           try {
             const blob = await file.async("blob");
             const fileExtension = file.name.split(".").pop()?.toLowerCase() ?? "";
@@ -42,6 +49,7 @@ async function convertImages(file: File, format: string, setProgress: (progress:
             if (fileExtension === "webp" && format === "webp") {
               zip.file(file.name, blob);
               completedFiles++;
+              setCurrentFile(file.name + ": Skipped");
               setProgress((completedFiles / totalFiles) * 100);
               continue;
             }
@@ -55,6 +63,7 @@ async function convertImages(file: File, format: string, setProgress: (progress:
               }) as Blob;
               imgBlob = convertedBlob;
             }
+            setCurrentFile(file.name + ": Converting");
 
             const img = new Image();//only one image
              const imageUrl = URL.createObjectURL(imgBlob);
@@ -133,6 +142,7 @@ export default function Home() {
   const [format, setFormat] = useState("jpeg");
   const [progress, setProgress] = useState(0);
   const [isConverting, setIsConverting] = useState(false);
+  const [currentFile, setCurrentFile] = useState<string>("");
   const { toast } = useToast();
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -158,7 +168,7 @@ export default function Home() {
     setProgress(0);
 
     try {
-      const convertedZipBlob = await convertImages(file, format, setProgress);
+      const convertedZipBlob = await convertImages(file, format, setProgress, setCurrentFile);
 
       const url = URL.createObjectURL(convertedZipBlob);
       const a = document.createElement("a");
@@ -187,15 +197,21 @@ export default function Home() {
   }, [file, format, toast]);
 
   return (<div className="flex flex-col items-center justify-center min-h-screen bg-background p-4">
-      <h1 className="text-2xl font-semibold mb-4">Zip Image Converter</h1>
-      <div className="flex flex-col gap-4 w-full max-w-md">
-        <div>
-          <Label htmlFor="zip-file">Upload Zip File:</Label>
-          <Input id="zip-file" type="file" accept=".zip" onChange={handleFileChange} disabled={isConverting} />
+      <h1 className="text-4xl font-bold text-center mb-6">Zip Image Converter</h1>
+      <p className="text-center text-muted-foreground mb-8 max-w-md">
+        This app allows you to convert multiple images contained within a zip file to a different image format. 
+        Simply upload a zip file containing your images, select the desired output format, and click 'Convert'. 
+        All other file types that are not images will be left intact and included in the output zip file.
+        The converted zip file will be downloaded directly to your device.
+      </p>
+      <div className="flex flex-col gap-6 w-full max-w-md p-6 border rounded-lg shadow-md bg-card">
+      <p className="text-center text-sm text-muted-foreground">Select a zip file and the desired output format.</p>
+        <div className="grid gap-2">
+          <Label htmlFor="zip-file" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">Upload Zip File:</Label>
+          <Input id="zip-file" type="file" accept=".zip" onChange={handleFileChange} disabled={isConverting} className="border-gray-300 focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"/>
         </div>
-
-        <div>
-          <Label htmlFor="format">Output Format:</Label>
+        <div className="grid gap-2">
+          <Label htmlFor="format" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">Output Format:</Label>
           <Select onValueChange={handleFormatChange} defaultValue={format}>
             <SelectTrigger className="w-full">
               <SelectValue placeholder="Select a format" />
@@ -208,16 +224,19 @@ export default function Home() {
             </SelectContent>
           </Select>
         </div>
-
-        <Button onClick={convert} disabled={isConverting || !file}>
+        <Button onClick={convert} disabled={isConverting || !file} className="bg-blue-500 hover:bg-blue-600 text-white">
           {isConverting ? "Converting..." : "Convert to " + format.toUpperCase()}
         </Button>
 
         {isConverting && (
-          <div className="w-full">
+          <div className="w-full mt-4">
+          <Label className="text-sm text-muted-foreground mt-1 text-center">Progress</Label>
             <Progress value={progress} />
             <p className="text-sm text-muted-foreground mt-1 text-center">
               {progress.toFixed(1)}%
+            </p>
+            <p className="text-sm text-muted-foreground mt-1 text-center">
+              {currentFile}
             </p>
           </div>
         )}
