@@ -8,14 +8,16 @@ import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-
-async function convertImages(file: File, format: string, setProgress: (progress: number) => void, setCurrentFile: (currentFile: string) => void): Promise<Blob> {
+interface Report {converted: number, skipped: number, failed: string[]}
+async function convertImages(file: File, format: string, setProgress: (progress: number) => void, setCurrentFile: (currentFile: string) => void, report : Report, setReport: React.Dispatch<React.SetStateAction<Report>>): Promise<Blob> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
 
+    let localReport = {...report};
     reader.onload = async (event) => {
       if (!event.target?.result) {
         reject(new Error("Failed to read the zip file."));
+        setReport({converted : 0, skipped: 0, failed : []})
         return;
       }
 
@@ -30,8 +32,12 @@ async function convertImages(file: File, format: string, setProgress: (progress:
           return !/\.(png|jpg|jpeg|heic|gif|webp|avif|bmp|tiff)$/i.test(relativePath);
         });
         for (const file of otherFiles){
+          localReport = {...localReport, skipped: localReport.skipped+1};
+          
+          setReport(localReport);
+
           zip.file(file.name, await file.async('blob'));
-        }
+        }       
         const totalFiles = files.length;
         let completedFiles = 0;
 
@@ -52,15 +58,26 @@ async function convertImages(file: File, format: string, setProgress: (progress:
               setCurrentFile(file.name + ": Skipped");
               setProgress((completedFiles / totalFiles) * 100);
               continue;
+             
             }
             let imgBlob: Blob = blob;
 
             if(fileExtension === 'heic'){
-              const convertedBlob = await heic2any({
-                blob: blob,
-                toType: 'image/jpeg',
-                quality: 0.9,
-              }) as Blob;
+              let convertedBlob : Blob;
+              try{
+                convertedBlob = await heic2any({
+                  blob: blob,
+                  toType: 'image/jpeg',
+                  quality: 0.9,
+                }) as Blob;
+              } catch (error : any){
+                console.error(`Error converting HEIC file: ${file.name}`, error?.message || "Unknown Error", error);              
+                localReport = {...localReport, failed: [...localReport.failed, file.name]};
+                setReport(localReport);
+                report.failed.push(file.name)
+                completedFiles++;
+                setProgress((completedFiles / totalFiles) * 100);
+              }
               imgBlob = convertedBlob;
             }
             setCurrentFile(file.name + ": Converting");
@@ -116,11 +133,15 @@ async function convertImages(file: File, format: string, setProgress: (progress:
             zip.file(newFileName, convertedBlob);
           } catch (error: any) {
             console.error(`Error converting ${file.name}:`, error?.message || 'Unknown error');
+            localReport = {...localReport, failed: [...localReport.failed, file.name]};
+                setReport(localReport);
           } finally {
             completedFiles++;
             setProgress((completedFiles / totalFiles) * 100);
+            localReport = {...localReport, converted: localReport.converted+1};
+            setReport(localReport);
           }
-        }
+        }       
 
         const outputZipBlob = await zip.generateAsync({ type: "blob" });
         resolve(outputZipBlob);
@@ -143,6 +164,8 @@ export default function Home() {
   const [progress, setProgress] = useState(0);
   const [isConverting, setIsConverting] = useState(false);
   const [currentFile, setCurrentFile] = useState<string>("");
+  const [report, setReport] = useState<Report>({converted : 0, skipped: 0, failed : []})
+
   const { toast } = useToast();
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -168,7 +191,9 @@ export default function Home() {
     setProgress(0);
 
     try {
-      const convertedZipBlob = await convertImages(file, format, setProgress, setCurrentFile);
+      setReport({converted : 0, skipped: 0, failed : []})
+
+      const convertedZipBlob = await convertImages(file, format, setProgress, setCurrentFile, report, setReport);
 
       const url = URL.createObjectURL(convertedZipBlob);
       const a = document.createElement("a");
@@ -193,7 +218,9 @@ export default function Home() {
     } finally {
       setIsConverting(false);
       setProgress(0);
-    }
+    }    
+
+
   }, [file, format, toast]);
 
   return (<div className="flex flex-col items-center justify-center min-h-screen bg-background p-4">
@@ -240,6 +267,23 @@ export default function Home() {
             </p>
           </div>
         )}
+        {!isConverting && (
+        <div className="w-full mt-4">
+          <Label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+            Conversion Report:
+          </Label>
+          <p className="text-sm text-muted-foreground mt-1">
+            {report.converted} image(s) converted successfully.
+          </p>
+          <p className="text-sm text-muted-foreground mt-1">
+            {report.skipped} file(s) were not images and were skipped.
+          </p>
+          <p className="text-sm text-muted-foreground mt-1">
+            {report.failed.length} image(s) failed to convert:
+            <ul>{report.failed.map((item) => (<li key={item}>{item}</li>))}</ul>
+          </p>
+        </div>
+      )}
       </div>
     </div>
   );
