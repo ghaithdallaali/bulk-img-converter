@@ -30,5 +30,6 @@ This is a simple web application that allows you to convert images within a zip 
 
 This command starts the development server. You can access the app in your browser at http://localhost:9002.
 
+![image](https://github.com/user-attachments/assets/5072dc10-5611-418b-9c5c-1373f30d3f41)
 
     
