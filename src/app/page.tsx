@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import heic2any from 'heic2any';
 
 async function convertImages(file: File, format: string, setProgress: (progress: number) => void): Promise<Blob> {
   return new Promise((resolve, reject) => {
@@ -35,9 +36,22 @@ async function convertImages(file: File, format: string, setProgress: (progress:
 
         for (const file of files) {
           try {
-            const img = new Image();
             const blob = await file.async("blob");
-            const imageUrl = URL.createObjectURL(blob);
+            let imgBlob: Blob = blob;
+
+            const fileExtension = file.name.split('.').pop()?.toLowerCase();
+
+            if (fileExtension === 'heic') {
+              const convertedBlob = await heic2any({
+                blob: blob,
+                toType: 'image/jpeg',
+                quality: 0.9,
+              }) as Blob;
+              imgBlob = convertedBlob;
+            }
+
+            const img = new Image();
+            const imageUrl = URL.createObjectURL(imgBlob);
 
             await new Promise<void>((resolve, reject) => {
               img.onload = () => {
@@ -85,9 +99,10 @@ async function convertImages(file: File, format: string, setProgress: (progress:
               continue;
             }
             zip.remove(file.name);
-            zip.file(file.name.substring(0, file.name.lastIndexOf('.')) + `.${format}`, convertedBlob);
+            const newFileName = file.name.substring(0, file.name.lastIndexOf('.')) + `.${format}`;
+            zip.file(newFileName, convertedBlob);
           } catch (error: any) {
-            console.error(`Error converting ${file.name}: ${error?.message || 'Unknown error'}`);
+            console.error(`Error converting ${file.name}:`, error?.message || 'Unknown error');
           } finally {
             completedFiles++;
             setProgress((completedFiles / totalFiles) * 100);
@@ -206,4 +221,3 @@ export default function Home() {
     </div>
   );
 }
-
