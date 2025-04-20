@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 interface Report {converted: number, skipped: number, failed: string[]}
 async function convertImages(file: File, format: string, setProgress: (progress: number) => void, setCurrentFile: (currentFile: string) => void, report : Report, setReport: React.Dispatch<React.SetStateAction<Report>>): Promise<Blob> {
+  const timeout = 60000;
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
 
@@ -48,6 +49,15 @@ async function convertImages(file: File, format: string, setProgress: (progress:
 
         for (const file of files) {
           setCurrentFile(file.name + ": Processing");
+          const startTime = Date.now();
+          const timeoutPromise = new Promise((_, reject) => {
+              setTimeout(() => {
+                  reject(new Error('Timeout'));
+              }, timeout);
+          });
+
+          const processPromise = (async () => {
+
           try {
             const blob = await file.async("blob");
             const fileExtension = file.name.split(".").pop()?.toLowerCase() ?? "";
@@ -85,13 +95,23 @@ async function convertImages(file: File, format: string, setProgress: (progress:
             const img = new Image();//only one image
              const imageUrl = URL.createObjectURL(imgBlob);
 
-             await new Promise<void>((resolve, reject) => {
+             await new Promise<void>((resolve, error) => {
               img.onload = () => {
                 URL.revokeObjectURL(imageUrl);
                 resolve();
               };              
               img.onerror = (error) => {
                 URL.revokeObjectURL(imageUrl);
+                reject(error);
+              };
+
+              img.onabort = (error) => {
+                URL.revokeObjectURL(imageUrl);
+                reject(error);
+              }
+              img.onstalled = (error) => {
+                URL.revokeObjectURL(imageUrl);
+
                 reject(error);
               };
 
@@ -134,12 +154,29 @@ async function convertImages(file: File, format: string, setProgress: (progress:
           } catch (error: any) {
             console.error(`Error converting ${file.name}:`, error?.message || 'Unknown error');
             localReport = {...localReport, failed: [...localReport.failed, file.name]};
-                setReport(localReport);
-          } finally {
-            completedFiles++;
-            setProgress((completedFiles / totalFiles) * 100);
+            setReport(localReport);
+          } 
+        })();
+          try {
+            await Promise.race([processPromise, timeoutPromise])
             localReport = {...localReport, converted: localReport.converted+1};
             setReport(localReport);
+          } catch (error: any) {
+            if(error.message === 'Timeout'){
+                console.error(`Error converting ${file.name}:`, 'Timeout');
+                localReport = {...localReport, failed: [...localReport.failed, file.name]};
+                setReport(localReport);
+            }
+          }finally{
+            const endTime = Date.now();
+            const elapsedTime = endTime - startTime;
+            
+            if(elapsedTime > timeout){
+                console.log(`${file.name} : image took more than ${timeout / 1000} seconds.`)
+            }
+
+            completedFiles++;
+            setProgress((completedFiles / totalFiles) * 100);
           }
         }       
 
