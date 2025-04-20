@@ -87,7 +87,7 @@ async function convertImages(file: File, format: string, setProgress: (progress:
             zip.remove(file.name);
             zip.file(file.name.substring(0, file.name.lastIndexOf('.')) + `.${format}`, convertedBlob);
           } catch (error: any) {
-            console.error(`Error converting ${file.name}:`, error);
+            console.error(`Error converting ${file.name}:`, error.message);
           } finally {
             completedFiles++;
             setProgress((completedFiles / totalFiles) * 100);
@@ -206,4 +206,5 @@ export default function Home() {
     </div>
   );
 }
+
 
